@@ -37,6 +37,52 @@ std::stringstream hasData(std::string s) {
   return std::stringstream();
 }
 
+double twiddle(double tol = 0.2) {
+	PID pid;
+
+	double p[] = { 0, 0, 0 };
+	double dp[] = { 1, 1, 1 };
+	pid.UpdateError(0.0);
+	double steer_value = -pid.Kp * pid.p_error - pid.Kd * pid.d_error - pid.Ki * pid.i_error;
+	if (steer_value > 1.0)
+		steer_value = 0.99;
+	if (steer_value < -1.0)
+		steer_value = -0.99;
+	double bestError = 100000;
+	double sum_dp = dp[0] + dp[1] + dp[2];
+	int it = 0;
+	while (sum_dp > tol) {
+		for (auto i = 0; i < 3; ++i)
+		{
+			p[i] += dp[i];
+			pid.UpdateError(0.0);
+			double steer_value = -pid.Kp * pid.p_error - pid.Kd * pid.d_error - pid.Ki * pid.i_error;
+
+			if (pid.TotalError() < bestError)
+			{
+				bestError = pid.TotalError();
+				dp[i] *= 1.1;
+			}
+			else {
+				p[i] -= 2 * dp[i];
+				pid.UpdateError(0.0);
+				double steer_value = -pid.Kp * pid.p_error - pid.Kd * pid.d_error - pid.Ki * pid.i_error;
+				if (pid.TotalError() < bestError)
+				{
+					bestError = pid.TotalError();
+					dp[i] *= 1.1;
+				}
+				else {
+					p[i] += dp[i];
+					dp[i] *= 0.9;
+					it += 1;
+				}
+			}
+		}
+	}
+	return 0.0;
+}
+
 
 int main()
 {
@@ -44,8 +90,9 @@ int main()
   uWS::Hub h;
 
   PID pid;
+  pid.Init(0.1, 0.0002, 0.6);
   // TODO: Initialize the pid variable.
-  
+
 
   h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -62,7 +109,6 @@ int main()
           double cte = std::stod(j[1]["cte"].get<std::string>());
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
-          double steer_value;
           /*
           * TODO: Calcuate steering value here, remember the steering value is
           * [-1, 1].
@@ -71,12 +117,22 @@ int main()
           */
 
 
+		  ///here is the twiddle alogirthm
+		  
+		  pid.UpdateError(cte);
+		  double steer_value = -pid.Kp * pid.p_error - pid.Kd * pid.d_error - pid.Ki * pid.i_error;
+		  if(steer_value > 1.0)
+			steer_value = 0.99;
+		  if(steer_value < -1.0)
+			steer_value = -0.99;
+		
+
           // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          std::cout << "CTE: " << cte << " Steering Value: " << steer_value <<"angle :" << angle << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.3;
+          msgJson["throttle"] = 0.4;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
           std::cout << msg << std::endl;
           (ws).send(msg.data(), msg.length(), uWS::OpCode::TEXT);
