@@ -19,3 +19,4 @@ tags
 *.exp
 *.ilk
 .idea
+cmake-build-debug
